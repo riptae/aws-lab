@@ -77,18 +77,27 @@ resource "aws_instance" "web" {
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   user_data = <<-EOF
-    
-    #! /bin/bash
-    # Amazon Linux 2023 : dnf 사용
-    dnf -y install awscli
-    echo "===== S3 LIST START =====" > /var/www/html/index.html
-    aws s3 ls s3://${aws_s3_bucket.bucket.bucket} >> /var/www/html/index.html 2>&1
-    echo "Bucket name: ${aws_s3_bucket.bucket.bucket}" >> /var/www/html/index.html
-    
-    # 간단 웹서버
-    dnf -y install nginx
-    systemctl enable --now nginx
-    EOF
+#!/bin/bash
+set -euxo pipefail
+
+dnf -y update
+dnf -y install nginx awscli
+
+# nginx 기본 문서 루트에 작성
+cat > /usr/share/nginx/html/index.html <<'HTML'
+<html>
+  <body>
+    <h1>===== S3 LIST START =====</h1>
+    <pre>
+HTML
+
+aws s3 ls s3://${aws_s3_bucket.bucket.bucket} >> /usr/share/nginx/html/index.html 2>&1 || true
+echo "Bucket name: ${aws_s3_bucket.bucket.bucket}" >> /usr/share/nginx/html/index.html
+echo "</pre></body></html>" >> /usr/share/nginx/html/index.html
+
+systemctl enable --now nginx
+EOF
+
 
   tags = { Name = "day7-ec2" }
 }
