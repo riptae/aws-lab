@@ -76,7 +76,7 @@ resource "aws_instance" "web" {
 
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
-  user_date = <<-EOF
+  user_data = <<-EOF
     
     #! /bin/bash
     # Amazon Linux 2023 : dnf 사용
@@ -89,35 +89,35 @@ resource "aws_instance" "web" {
     dnf -y install nginx
     systemctl enable --now nginx
     EOF
-    
-    	tags = { Name = "day7-ec2" }
+
+  tags = { Name = "day7-ec2" }
 }
 
 data "aws_ami" "al2023" {
   most_recent = true
-  owners = ["amazon"]
-  
+  owners      = ["amazon"]
+
   filter {
-    name = "name"
+    name   = "name"
     values = ["al2023-ami-*-x86_64"]
   }
 
   filter {
-    name = "architecture"
+    name   = "architecture"
     values = ["x86_64"]
   }
 
   filter {
-    name = "virtualization-type"
+    name   = "virtualization-type"
     values = ["hvm"]
   }
 }
 
 # [8] S3 bucket
 resource "aws_s3_bucket" "bucket" {
-  bucket = "day-7-bucket-${random_id.rand.hex}"
+  bucket        = "day-7-bucket-${random_id.rand.hex}"
   force_destroy = true
-  tags = { Name = "day7-bucket"}
+  tags          = { Name = "day7-bucket" }
 }
 
 resource "random_id" "rand" {
@@ -127,22 +127,22 @@ resource "random_id" "rand" {
 # [9] IAM Role & Policy & Instance Profile
 data "aws_iam_policy_document" "ec2_trust" {
   statement {
-    actions = [ "sts:AssumeRole" ]
+    actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
-      identifiers = [ "ec2.amazonaws.com" ]
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
     }
   }
 }
 
 resource "aws_iam_role" "ec2_role" {
-  name = "day7-ec2-s3-role"
+  name               = "day7-ec2-s3-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_trust.json
 }
 
 resource "aws_iam_role_policy_attachment" "attach_s3_readonly" {
-  role = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"  
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
