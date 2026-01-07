@@ -1,3 +1,23 @@
+terraform {
+  required_version = ">= 1.5.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
 
 # [1] VPC
 resource "aws_vpc" "main" {
@@ -70,36 +90,14 @@ resource "aws_security_group" "web_sg" {
 # [7] ec2 instance
 resource "aws_instance" "web" {
   ami                    = data.aws_ami.al2023.id
-  instance_type          = "t3.micro"
+  instance_type          = var.instance_type
   subnet_id              = aws_subnet.public_a.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
 
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-
-  user_data = <<-EOF
-#!/bin/bash
-set -euxo pipefail
-
-dnf -y update
-dnf -y install nginx awscli
-
-# nginx 기본 문서 루트에 작성
-cat > /usr/share/nginx/html/index.html <<'HTML'
-<html>
-  <body>
-    <h1>===== S3 LIST START =====</h1>
-    <pre>
-HTML
-
-aws s3 ls s3://${aws_s3_bucket.bucket.bucket} >> /usr/share/nginx/html/index.html 2>&1 || true
-echo "Bucket name: ${aws_s3_bucket.bucket.bucket}" >> /usr/share/nginx/html/index.html
-echo "</pre></body></html>" >> /usr/share/nginx/html/index.html
-
-systemctl enable --now nginx
-EOF
-
-
-  tags = { Name = "day7-ec2" }
+  tags = {
+    Name = "${var.project}-web"
+    Env  = var.env
+  }
 }
 
 data "aws_ami" "al2023" {
@@ -120,50 +118,4 @@ data "aws_ami" "al2023" {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-}
-
-# [8] S3 bucket
-resource "aws_s3_bucket" "bucket" {
-  bucket        = "day-7-bucket-${random_id.rand.hex}"
-  force_destroy = true
-  tags          = { Name = "day7-bucket" }
-}
-
-resource "random_id" "rand" {
-  byte_length = 4
-}
-
-# [9] IAM Role & Policy & Instance Profile
-data "aws_iam_policy_document" "ec2_trust" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "ec2_role" {
-  name               = "day7-ec2-s3-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_trust.json
-}
-
-resource "aws_iam_role_policy_attachment" "attach_s3_readonly" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-}
-
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "day7-ec2-profile"
-  role = aws_iam_role.ec2_role.name
-}
-
-# [10] output
-output "ec2_public_ip" {
-  value = aws_instance.web.public_ip
-}
-
-output "s3_bucket_name" {
-  value = aws_s3_bucket.bucket.bucket
 }
