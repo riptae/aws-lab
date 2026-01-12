@@ -119,3 +119,9 @@ data "aws_ami" "al2023" {
     values = ["hvm"]
   }
 }
+
+# [8] key pair
+resource "aws_key_pair" "ec2_key" {
+  key_name   = "mykey"
+  public_key = file(var.public_key_path)
+}

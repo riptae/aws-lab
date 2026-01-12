@@ -27,3 +27,10 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
+#5 : key_path
+variable "public_key_path" {
+  description = "EC2 SSH public key path"
+  type        = string
+  default = "empty"
+}
+
