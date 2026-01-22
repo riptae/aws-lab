@@ -1,0 +1,83 @@
+name: Deploy Infra and Configure
+
+on:
+    push:
+        branches: [ "main" ]
+    
+    workflow_dispatch:
+
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        defaults:
+            run:
+                shell: bash
+
+        steps:
+            - name: Checkout
+                uses: actions/checkout@v4
+            
+        
+            # Terraform 설치
+            - name: Setup Terraform
+                uses: hashicorp/setup-terraform@v3
+                with:
+                    terraform_version: 1.6.6
+            
+            # AWS 인증 (Github Secrets 사용)
+            - name: Configure AWS credentials
+                uses: aws-actions/configure-aws-credentials@v4
+                with:
+                aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                aws-region: ${{ secrets.AWS_REGION }}
+
+                 # SSH PEM 키를 runner에 파일로 생성
+      # (Secrets에 EC2_PEM_KEY 라는 이름으로 PEM 전체를 저장해둬야 함)
+      - name: Create PEM key file
+        run: |
+          mkdir -p pem
+          echo "${{ secrets.EC2_PEM_KEY }}" > pem/mykey.pem
+          chmod 600 pem/mykey.pem
+          ls -al pem
+
+      # Ansible 설치
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+          ansible --version
+
+      # Terraform 실행 (IaC)
+      - name: Terraform Init & Apply
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve
+
+      # (선택) Terraform output 확인용
+      - name: Terraform Output (debug)
+        run: |
+          cd terraform
+          terraform output
+
+      # Inventory 생성 스크립트 실행 (CM 준비)
+      - name: Build inventory
+        run: |
+          chmod +x scripts/make_inventory.sh
+          bash scripts/make_inventory.sh
+          echo "----- inventory.ini -----"
+          cat ansible/inventory.ini || cat inventory.ini
+
+      # Ansible 실행 (CM)
+      - name: Run Ansible
+        run: |
+          cd ansible
+          # inventory 위치가 ansible/inventory.ini 라고 가정
+          if [ -f inventory.ini ]; then
+            ansible-playbook -i inventory.ini playbooks/nginx.yml
+          else
+            ansible-playbook -i ../inventory.ini playbooks/nginx.yml
+          fi
